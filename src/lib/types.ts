@@ -1,0 +1,121 @@
+export interface Event {
+  id: string;
+  venue: string;
+  venue_slug: string;
+  category: 'music' | 'comedy' | 'theater' | 'variety';
+  title: string;
+  date: string; // YYYY-MM-DD
+  time: string | null;
+  price: string | null;
+  sold_out: boolean;
+  image_url: string | null;
+  event_url: string | null;
+  description: string | null;
+  scraped_at: string;
+}
+
+export interface VenueConfig {
+  name: string;
+  slug: string;
+  url: string;
+  category: Event['category'];
+  neighborhood: string;
+  group: string;
+  groupOrder: number;
+  venueOrder: number; // within group, by walking distance from home
+  walkMinutes: number;
+  transitMinutes: number | null; // subway time if far; null = just walk
+  drinkPrice: number; // average drink price in dollars
+}
+
+// Subway fare
+export const SUBWAY_FARE = 2.90;
+
+// Groups in the user's original order
+export const VENUE_GROUPS = [
+  "What's Happening in Gowanus",
+  'Bars with Bands',
+  'Long Shots',
+  'Comedy Elsewhere',
+  'Theater',
+] as const;
+
+// Walking distances computed from 433 Warren St Brooklyn, NY 11217
+// Venues within each group are ordered by distance from home
+export const VENUES: VenueConfig[] = [
+  // ── What's Happening in Gowanus (group 1) ──
+  // All very close to 433 Warren St
+  { name: 'Halyards', slug: 'halyards', url: '', category: 'variety', neighborhood: 'Gowanus',
+    group: "What's Happening in Gowanus", groupOrder: 1, venueOrder: 1,
+    walkMinutes: 5, transitMinutes: null, drinkPrice: 7 },
+  { name: 'The Bell House', slug: 'bellhouse', url: 'https://thebellhouseny.com/', category: 'music', neighborhood: 'Gowanus',
+    group: "What's Happening in Gowanus", groupOrder: 1, venueOrder: 2,
+    walkMinutes: 8, transitMinutes: null, drinkPrice: 9 },
+  { name: 'Littlefield', slug: 'littlefield', url: 'https://littlefieldnyc.com/all-shows/', category: 'variety', neighborhood: 'Gowanus',
+    group: "What's Happening in Gowanus", groupOrder: 1, venueOrder: 3,
+    walkMinutes: 9, transitMinutes: null, drinkPrice: 9 },
+  { name: 'Union Hall', slug: 'unionhall', url: 'https://unionhallny.com/', category: 'music', neighborhood: 'Gowanus',
+    group: "What's Happening in Gowanus", groupOrder: 1, venueOrder: 4,
+    walkMinutes: 10, transitMinutes: null, drinkPrice: 9 },
+  { name: 'Eastville Comedy Club', slug: 'eastville', url: 'https://www.eastvillecomedy.com', category: 'comedy', neighborhood: 'Gowanus',
+    group: "What's Happening in Gowanus", groupOrder: 1, venueOrder: 5,
+    walkMinutes: 12, transitMinutes: null, drinkPrice: 10 },
+  { name: 'Murmrr', slug: 'murmrr', url: 'https://murmrr.com/', category: 'music', neighborhood: 'Gowanus',
+    group: "What's Happening in Gowanus", groupOrder: 1, venueOrder: 6,
+    walkMinutes: 14, transitMinutes: null, drinkPrice: 12 },
+  { name: 'Heights Players', slug: 'heightsplayers', url: 'https://www.heightsplayers.org/box-office', category: 'theater', neighborhood: 'Brooklyn Heights',
+    group: "What's Happening in Gowanus", groupOrder: 1, venueOrder: 7,
+    walkMinutes: 18, transitMinutes: null, drinkPrice: 0 },
+
+  // ── Bars with Bands (group 2) ──
+  { name: 'Lucky 13 Saloon', slug: 'lucky13', url: 'https://www.lucky13saloon.com/events', category: 'music', neighborhood: 'Park Slope',
+    group: 'Bars with Bands', groupOrder: 2, venueOrder: 1,
+    walkMinutes: 12, transitMinutes: null, drinkPrice: 7 },
+  { name: 'Barbès', slug: 'barbes', url: 'https://www.barbesbrooklyn.com/events', category: 'music', neighborhood: 'Park Slope',
+    group: 'Bars with Bands', groupOrder: 2, venueOrder: 2,
+    walkMinutes: 15, transitMinutes: null, drinkPrice: 8 },
+
+  // ── Long Shots (group 3) ──
+  { name: 'Public Records', slug: 'publicrecords', url: 'https://dice.fm/venue/public-records-w2qg', category: 'music', neighborhood: 'Gowanus',
+    group: 'Long Shots', groupOrder: 3, venueOrder: 1,
+    walkMinutes: 10, transitMinutes: null, drinkPrice: 15 },
+  { name: 'Jalopy Theatre', slug: 'jalopy', url: 'https://jalopytheatre.netlify.app/performances', category: 'music', neighborhood: 'Red Hook',
+    group: 'Long Shots', groupOrder: 3, venueOrder: 2,
+    walkMinutes: 25, transitMinutes: null, drinkPrice: 8 },
+  { name: "Young Ethel's", slug: 'youngethels', url: 'https://www.youngethels.com/events', category: 'music', neighborhood: 'Williamsburg',
+    group: 'Long Shots', groupOrder: 3, venueOrder: 3,
+    walkMinutes: 50, transitMinutes: 22, drinkPrice: 10 },
+  { name: 'HERE Arts Center', slug: 'here', url: 'https://ci.ovationtix.com/27285', category: 'theater', neighborhood: 'SoHo',
+    group: 'Long Shots', groupOrder: 3, venueOrder: 4,
+    walkMinutes: 55, transitMinutes: 30, drinkPrice: 14 },
+
+  // ── Comedy Elsewhere (group 4) ──
+  { name: 'Brooklyn Comedy Collective', slug: 'brooklyncc', url: 'https://www.brooklyncc.com/show-schedule', category: 'comedy', neighborhood: 'Williamsburg',
+    group: 'Comedy Elsewhere', groupOrder: 4, venueOrder: 1,
+    walkMinutes: 45, transitMinutes: 20, drinkPrice: 10 },
+  { name: 'Second City', slug: 'secondcity', url: 'https://www.secondcity.com/shows/', category: 'comedy', neighborhood: 'Williamsburg',
+    group: 'Comedy Elsewhere', groupOrder: 4, venueOrder: 2,
+    walkMinutes: 45, transitMinutes: 20, drinkPrice: 12 },
+  { name: 'Caveat', slug: 'caveat', url: 'https://caveat.nyc/events', category: 'comedy', neighborhood: 'Lower East Side',
+    group: 'Comedy Elsewhere', groupOrder: 4, venueOrder: 3,
+    walkMinutes: 55, transitMinutes: 28, drinkPrice: 14 },
+  { name: 'UCB', slug: 'ucb', url: 'https://ucbcomedy.com/nyc/', category: 'comedy', neighborhood: "Hell's Kitchen",
+    group: 'Comedy Elsewhere', groupOrder: 4, venueOrder: 4,
+    walkMinutes: 70, transitMinutes: 35, drinkPrice: 10 },
+  { name: 'Magnet Theater', slug: 'magnet', url: 'https://magnettheater.com/calendar/', category: 'comedy', neighborhood: 'Midtown',
+    group: 'Comedy Elsewhere', groupOrder: 4, venueOrder: 5,
+    walkMinutes: 75, transitMinutes: 35, drinkPrice: 10 },
+
+  // ── Theater (group 5) ──
+  { name: 'Gallery Players', slug: 'galleryplayers', url: 'https://www.galleryplayers.com', category: 'theater', neighborhood: 'Park Slope',
+    group: 'Theater', groupOrder: 5, venueOrder: 1,
+    walkMinutes: 15, transitMinutes: null, drinkPrice: 0 },
+  { name: 'Lucille Lortel Theatre', slug: 'lortel', url: 'https://lortel.org/', category: 'theater', neighborhood: 'West Village',
+    group: 'Theater', groupOrder: 5, venueOrder: 2,
+    walkMinutes: 55, transitMinutes: 25, drinkPrice: 14 },
+];
+
+// Lookup venue config by slug
+export function getVenueConfig(slug: string): VenueConfig | undefined {
+  return VENUES.find(v => v.slug === slug);
+}

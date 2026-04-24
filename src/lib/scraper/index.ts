@@ -1,5 +1,4 @@
 import { Event, VENUES, VenueConfig } from '../types';
-import { upsertEvents, clearVenueEvents } from '../db';
 import { closePuppeteerBrowser } from './base';
 
 // Import all scrapers
@@ -53,82 +52,60 @@ function getScraperForVenue(venue: VenueConfig): BaseScraper | null {
 
 export interface ScrapeResult {
   venue: string;
-  eventsFound: number;
+  events: Event[];
   error?: string;
 }
 
-export async function scrapeAllVenues(): Promise<ScrapeResult[]> {
+export async function scrapeAllVenues(
+  onProgress?: (result: ScrapeResult) => void,
+): Promise<ScrapeResult[]> {
   const results: ScrapeResult[] = [];
 
-  // Scrape server-rendered sites first (faster, no Puppeteer needed)
   const serverRendered = ['eastville', 'lortel', 'galleryplayers', 'lucky13', 'halyards'];
   const puppeteerBased = ['littlefield', 'bellhouse', 'unionhall', 'murmrr', 'heightsplayers', 'barbes', 'publicrecords', 'youngethels', 'jalopy', 'here', 'ucb', 'brooklyncc', 'secondcity', 'magnet', 'caveat'];
 
-  // Run server-rendered scrapers in parallel (they're just HTTP fetches)
   const serverVenues = VENUES.filter(v => serverRendered.includes(v.slug));
   const serverResults = await Promise.allSettled(
-    serverVenues.map(async (venue) => {
+    serverVenues.map(async (venue): Promise<ScrapeResult> => {
       const scraper = getScraperForVenue(venue);
-      if (!scraper) return { venue: venue.name, eventsFound: 0, error: 'No scraper' };
+      if (!scraper) return { venue: venue.name, events: [], error: 'No scraper' };
       try {
         const events = await scraper.scrape();
-        if (events.length > 0) {
-          clearVenueEvents(venue.slug);
-          upsertEvents(events);
-        }
-        return { venue: venue.name, eventsFound: events.length };
+        return { venue: venue.name, events };
       } catch (err) {
-        return { venue: venue.name, eventsFound: 0, error: String(err) };
+        return { venue: venue.name, events: [], error: String(err) };
       }
     })
   );
 
   for (const result of serverResults) {
-    results.push(result.status === 'fulfilled' ? result.value : { venue: 'unknown', eventsFound: 0, error: String(result.reason) });
+    const r = result.status === 'fulfilled'
+      ? result.value
+      : { venue: 'unknown', events: [], error: String(result.reason) };
+    results.push(r);
+    onProgress?.(r);
   }
 
-  // Run Puppeteer scrapers sequentially (shared browser)
   for (const venue of VENUES.filter(v => puppeteerBased.includes(v.slug))) {
     const scraper = getScraperForVenue(venue);
     if (!scraper) {
-      results.push({ venue: venue.name, eventsFound: 0, error: 'No scraper' });
+      const r = { venue: venue.name, events: [], error: 'No scraper' };
+      results.push(r);
+      onProgress?.(r);
       continue;
     }
     try {
       const events = await scraper.scrape();
-      if (events.length > 0) {
-        clearVenueEvents(venue.slug);
-        upsertEvents(events);
-      }
-      results.push({ venue: venue.name, eventsFound: events.length });
+      const r = { venue: venue.name, events };
+      results.push(r);
+      onProgress?.(r);
     } catch (err) {
-      results.push({ venue: venue.name, eventsFound: 0, error: String(err) });
+      const r = { venue: venue.name, events: [], error: String(err) };
+      results.push(r);
+      onProgress?.(r);
     }
   }
 
-  // Close browser when done
   await closePuppeteerBrowser();
-
   return results;
-}
-
-export async function scrapeVenue(slug: string): Promise<ScrapeResult> {
-  const venue = VENUES.find(v => v.slug === slug);
-  if (!venue) return { venue: slug, eventsFound: 0, error: 'Venue not found' };
-
-  const scraper = getScraperForVenue(venue);
-  if (!scraper) return { venue: venue.name, eventsFound: 0, error: 'No scraper' };
-
-  try {
-    const events = await scraper.scrape();
-    if (events.length > 0) {
-      clearVenueEvents(venue.slug);
-      upsertEvents(events);
-    }
-    await closePuppeteerBrowser();
-    return { venue: venue.name, eventsFound: events.length };
-  } catch (err) {
-    await closePuppeteerBrowser();
-    return { venue: venue.name, eventsFound: 0, error: String(err) };
-  }
 }

@@ -22,6 +22,8 @@ import { MagnetScraper } from './venues/magnet';
 import { CaveatScraper } from './venues/caveat';
 import { LortelScraper } from './venues/lortel';
 import { GalleryPlayersScraper } from './venues/galleryplayers';
+import { NitehawkScraper } from './venues/nitehawk';
+import { AlamoDrafthouseBrooklynScraper } from './venues/alamodrafthouse';
 import { BaseScraper } from './base';
 
 function getScraperForVenue(venue: VenueConfig): BaseScraper | null {
@@ -46,6 +48,9 @@ function getScraperForVenue(venue: VenueConfig): BaseScraper | null {
     case 'caveat': return new CaveatScraper(venue);
     case 'lortel': return new LortelScraper(venue);
     case 'galleryplayers': return new GalleryPlayersScraper(venue);
+    case 'nitehawkwilliamsburg': return new NitehawkScraper(venue);
+    case 'nitehawkprospectpark': return new NitehawkScraper(venue);
+    case 'alamobrooklyn': return new AlamoDrafthouseBrooklynScraper(venue);
     default: return null;
   }
 }
@@ -62,7 +67,7 @@ export async function scrapeAllVenues(
   const results: ScrapeResult[] = [];
 
   const serverRendered = ['eastville', 'lortel', 'galleryplayers', 'lucky13', 'halyards'];
-  const puppeteerBased = ['littlefield', 'bellhouse', 'unionhall', 'murmrr', 'heightsplayers', 'barbes', 'publicrecords', 'youngethels', 'jalopy', 'here', 'ucb', 'brooklyncc', 'secondcity', 'magnet', 'caveat'];
+  const puppeteerBased = ['littlefield', 'bellhouse', 'unionhall', 'murmrr', 'heightsplayers', 'barbes', 'publicrecords', 'youngethels', 'jalopy', 'here', 'ucb', 'brooklyncc', 'secondcity', 'magnet', 'caveat', 'nitehawkwilliamsburg', 'nitehawkprospectpark', 'alamobrooklyn'];
 
   const serverVenues = VENUES.filter(v => serverRendered.includes(v.slug));
   const serverResults = await Promise.allSettled(

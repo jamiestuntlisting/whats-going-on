@@ -38,6 +38,7 @@ export const VENUE_GROUPS = [
   'Long Shots',
   'Comedy Elsewhere',
   'Theater',
+  'Cinema',
 ] as const;
 
 // Walking distances computed from 433 Warren St Brooklyn, NY 11217
@@ -113,6 +114,23 @@ export const VENUES: VenueConfig[] = [
   { name: 'Lucille Lortel Theatre', slug: 'lortel', url: 'https://lortel.org/', category: 'theater', neighborhood: 'West Village',
     group: 'Theater', groupOrder: 5, venueOrder: 2,
     walkMinutes: 55, transitMinutes: 25, drinkPrice: 14 },
+
+  // ── Cinema (group 6) ──
+  { name: 'Nitehawk Prospect Park', slug: 'nitehawkprospectpark',
+    url: 'https://nitehawkcinema.com/prospectpark/showtimes/',
+    category: 'variety', neighborhood: 'Park Slope',
+    group: 'Cinema', groupOrder: 6, venueOrder: 1,
+    walkMinutes: 20, transitMinutes: null, drinkPrice: 10 },
+  { name: 'Alamo Drafthouse Brooklyn', slug: 'alamobrooklyn',
+    url: 'https://drafthouse.com/brooklyn-downtown',
+    category: 'variety', neighborhood: 'Downtown Brooklyn',
+    group: 'Cinema', groupOrder: 6, venueOrder: 2,
+    walkMinutes: 25, transitMinutes: 12, drinkPrice: 10 },
+  { name: 'Nitehawk Williamsburg', slug: 'nitehawkwilliamsburg',
+    url: 'https://nitehawkcinema.com/williamsburg/showtimes/',
+    category: 'variety', neighborhood: 'Williamsburg',
+    group: 'Cinema', groupOrder: 6, venueOrder: 3,
+    walkMinutes: 50, transitMinutes: 25, drinkPrice: 10 },
 ];
 
 // Lookup venue config by slug

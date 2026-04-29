@@ -31,7 +31,6 @@ export default function EventList() {
   const [category, setCategory] = useState('all');
   const [events, setEvents] = useState<EnrichedEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scraping, setScraping] = useState(false);
   const [lastScrape, setLastScrape] = useState<string | null>(null);
 
   const fetchEvents = useCallback(async () => {
@@ -51,18 +50,6 @@ export default function EventList() {
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
-
-  const handleScrape = async () => {
-    setScraping(true);
-    try {
-      await fetch('/api/scrape', { method: 'POST' });
-      await fetchEvents();
-    } catch (err) {
-      console.error('Scrape failed:', err);
-    } finally {
-      setScraping(false);
-    }
-  };
 
   const scrapeAge = lastScrape
     ? Math.round((Date.now() - new Date(lastScrape).getTime()) / (1000 * 60))
@@ -85,21 +72,16 @@ export default function EventList() {
       <CategoryFilter selected={category} onChange={setCategory} />
 
       {/* Scrape status */}
-      <div className="flex items-center justify-between text-xs text-zinc-400">
+      <div className="flex items-center text-xs text-zinc-400">
         <span>
           {scrapeAge !== null
             ? scrapeAge < 60
               ? `Updated ${scrapeAge}m ago`
-              : `Updated ${Math.round(scrapeAge / 60)}h ago`
+              : scrapeAge < 60 * 24
+                ? `Updated ${Math.round(scrapeAge / 60)}h ago`
+                : `Updated ${Math.round(scrapeAge / (60 * 24))}d ago`
             : 'No data yet'}
         </span>
-        <button
-          onClick={handleScrape}
-          disabled={scraping}
-          className="px-3 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors"
-        >
-          {scraping ? 'Refreshing...' : 'Refresh'}
-        </button>
       </div>
 
       {/* Events */}
@@ -121,7 +103,7 @@ export default function EventList() {
           <p className="text-4xl mb-3">🤷</p>
           <p className="text-zinc-500 dark:text-zinc-400 font-medium">No events found</p>
           <p className="text-zinc-400 dark:text-zinc-500 text-sm mt-1">
-            {lastScrape ? 'Try a different date or category' : 'Hit Refresh to load events'}
+            {lastScrape ? 'Try a different date or category' : 'No events loaded yet — run `npm run scrape` locally and commit public/events.json'}
           </p>
         </div>
       ) : (

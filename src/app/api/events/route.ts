@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getEventsByDate, getEventsInRange, getEventDatesInMonth, getLastScrapeTime } from '@/lib/db';
+import { getEventsByDate, getEventsInRange, getEventDatesInMonth, getLastScrapeTime } from '@/lib/events-data';
 import { Event, getVenueConfig, SUBWAY_FARE } from '@/lib/types';
 import { getSettings } from '@/lib/settings';
 

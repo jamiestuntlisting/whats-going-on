@@ -2,46 +2,44 @@ import * as cheerio from 'cheerio';
 import { BaseScraper, scrapeWithPuppeteer } from '../base';
 import { Event } from '../../types';
 
+// Caveat events page lists shows as cards. Reliable info: a link to
+// /events/<slug>-M-D-YYYY whose URL slug encodes the show date, and a
+// .show-title element with the human title.
 export class CaveatScraper extends BaseScraper {
   async scrape(): Promise<Event[]> {
-    const html = await scrapeWithPuppeteer(this.venue.url, '.event, .show, article');
+    const html = await scrapeWithPuppeteer(this.venue.url, 'a[href*="/events/"]');
     const $ = cheerio.load(html);
     const events: Event[] = [];
+    const seen = new Set<string>();
 
-    // Caveat is a React SPA - look for event elements after render
-    $('a[href*="event"], .event, .show, article, [class*="event"], .card').each((_, el) => {
+    $('a[href*="/events/"]').each((_, el) => {
       try {
-        const $el = $(el);
-        const title = $el.find('h2, h3, h4, .title, .event-title').first().text().trim() ||
-                      $el.text().trim().split('\n')[0]?.trim() || '';
-        if (!title || title.length < 3 || title.length > 150) return;
+        const $a = $(el);
+        const href = $a.attr('href') || '';
+        // Match trailing -M-D-YYYY in the slug
+        const m = href.match(/-(\d{1,2})-(\d{1,2})-(\d{4})(?:[/?#]|$)/);
+        if (!m) return;
+        const date = `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
 
-        const text = $el.text();
-        const dateMatch = text.match(/(\w+),?\s+(\w+)\s+(\d{1,2}),?\s*(\d{4})?/) ||
-                          text.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
-        let date: string | null = null;
-        if (dateMatch) {
-          const d = new Date(dateMatch[0]);
-          if (!isNaN(d.getTime())) {
-            date = d.toISOString().split('T')[0];
-          }
+        // Title: prefer .show-title within the card
+        let title = $a.find('.show-title').first().text().trim();
+        if (!title) title = ($a.find('h1, h2, h3').first().text() || '').trim();
+        if (!title) {
+          // Fallback: derive from slug
+          const slug = href.split('/events/')[1]?.split('-' + m[1] + '-')[0] || '';
+          title = slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         }
-        if (!date) return;
+        if (!title) return;
 
-        const timeMatch = text.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM))/);
-        const priceMatch = text.match(/\$(\d+)/);
-        const img = $el.find('img').first().attr('src') || null;
-        const link = $el.attr('href') || $el.find('a').first().attr('href') || '';
-        const soldOut = /sold\s*out/i.test(text);
+        const key = `${title}|${date}|${href}`;
+        if (seen.has(key)) return;
+        seen.add(key);
 
         events.push(this.makeEvent({
-          title: title.substring(0, 100),
+          title,
           date,
-          time: timeMatch ? this.parseTime(timeMatch[1]) : null,
-          price: priceMatch ? `$${priceMatch[1]}` : null,
-          sold_out: soldOut,
-          image_url: img,
-          event_url: link ? (link.startsWith('http') ? link : new URL(link, this.venue.url).href) : this.venue.url,
+          time: null,
+          event_url: href.startsWith('http') ? href : new URL(href, this.venue.url).href,
         }));
       } catch {}
     });

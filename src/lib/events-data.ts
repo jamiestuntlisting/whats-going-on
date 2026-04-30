@@ -42,6 +42,34 @@ export function getEventsInRange(startDate: string, endDate: string): Event[] {
   return getAllEvents().filter(e => e.date >= startDate && e.date <= endDate);
 }
 
+export function getEventsByVenue(venueSlug: string): Event[] {
+  const events = getAllEvents().filter(e => e.venue_slug === venueSlug);
+  // Sort: upcoming events first (by date asc, then time), past events last (most recent first).
+  const today = new Date().toISOString().split('T')[0];
+  const upcoming = events.filter(e => e.date >= today)
+    .sort((a, b) => (a.date.localeCompare(b.date)) || (a.time || 'ZZ').localeCompare(b.time || 'ZZ'));
+  const past = events.filter(e => e.date < today)
+    .sort((a, b) => (b.date.localeCompare(a.date)) || (b.time || '').localeCompare(a.time || ''));
+  return [...upcoming, ...past];
+}
+
+export function getEventCountsByVenue(): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const e of getAllEvents()) {
+    counts.set(e.venue_slug, (counts.get(e.venue_slug) ?? 0) + 1);
+  }
+  return counts;
+}
+
+export function getUpcomingEventCountsByVenue(): Map<string, number> {
+  const today = new Date().toISOString().split('T')[0];
+  const counts = new Map<string, number>();
+  for (const e of getAllEvents()) {
+    if (e.date >= today) counts.set(e.venue_slug, (counts.get(e.venue_slug) ?? 0) + 1);
+  }
+  return counts;
+}
+
 export function getEventDatesInMonth(year: number, month: number): string[] {
   const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
   const endMonth = month === 12 ? 1 : month + 1;

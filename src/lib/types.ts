@@ -49,7 +49,7 @@ export const VENUES: VenueConfig[] = [
   { name: 'Halyards', slug: 'halyards', url: '', category: 'variety', neighborhood: 'Gowanus',
     group: "What's Happening in Gowanus", groupOrder: 1, venueOrder: 1,
     walkMinutes: 5, transitMinutes: null, drinkPrice: 7 },
-  { name: 'The Bell House', slug: 'bellhouse', url: 'https://thebellhouseny.com/', category: 'music', neighborhood: 'Gowanus',
+  { name: 'The Bell House', slug: 'bellhouse', url: 'https://www.thebellhouseny.com/shows', category: 'music', neighborhood: 'Gowanus',
     group: "What's Happening in Gowanus", groupOrder: 1, venueOrder: 2,
     walkMinutes: 8, transitMinutes: null, drinkPrice: 9 },
   { name: 'Littlefield', slug: 'littlefield', url: 'https://littlefieldnyc.com/all-shows/', category: 'variety', neighborhood: 'Gowanus',

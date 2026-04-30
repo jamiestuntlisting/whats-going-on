@@ -2,60 +2,59 @@ import * as cheerio from 'cheerio';
 import { BaseScraper, scrapeWithPuppeteer } from '../base';
 import { Event } from '../../types';
 
+// Murmrr embeds SeeTickets list cards on its homepage. Each card:
+//   .seetickets-list-event-container
+//     .title > a (title + url)
+//     .date              ("Sat May 2")
+//     .doortime-showtime ("Show at <span>10:30PM</span>")
+//     .price             ("$50.00-$75.00")
 export class MurmrrScraper extends BaseScraper {
   async scrape(): Promise<Event[]> {
-    // Seetickets widget loads via AJAX - needs Puppeteer
     const html = await scrapeWithPuppeteer(this.venue.url, '.seetickets-list-event-container');
     const $ = cheerio.load(html);
     const events: Event[] = [];
+    const seen = new Set<string>();
+
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1;
 
     $('.seetickets-list-event-container').each((_, el) => {
       try {
         const $el = $(el);
-        const title = $el.find('.seetickets-list-event-title, h2, h3').first().text().trim();
+        const $titleA = $el.find('.title a').first();
+        const title = $titleA.text().replace(/\s+/g, ' ').trim();
         if (!title) return;
 
-        const dateText = $el.find('.seetickets-list-event-date, .date, time').first().text().trim();
-        // Seetickets dates: "Fri Apr 3"
-        const currentYear = new Date().getFullYear();
-        let date: string | null = null;
-        if (dateText) {
-          // Try direct parse first
-          date = this.parseDate(dateText);
-          // If that fails, try appending year
-          if (!date) {
-            const d = new Date(`${dateText}, ${currentYear}`);
-            if (!isNaN(d.getTime())) {
-              date = d.toISOString().split('T')[0];
-            }
-          }
-        }
-        if (!date) return;
+        // Date "Sat May 2" — no year. Assume current, advance to next year if month already passed.
+        const dateText = $el.find('.date').first().text().trim();
+        const dm = dateText.match(/(\w{3,9})\s+(\d{1,2})/i);
+        if (!dm) return;
+        const parsed = this.parseDate(`${dm[1]} ${dm[2]}, ${currentYear}`);
+        if (!parsed) return;
+        const month = Number(parsed.split('-')[1]);
+        const finalYear = month < currentMonth ? currentYear + 1 : currentYear;
+        const date = `${finalYear}-${parsed.split('-').slice(1).join('-')}`;
 
-        const timeText = $el.find('.seetickets-list-event-time, .time').first().text().trim();
-        // "Doors at 8:00PM / Show at 9:00PM" -> extract show time
-        const showTimeMatch = timeText.match(/show\s+at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM))/i) ||
-                              timeText.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM))/i);
+        const showtime = $el.find('.see-showtime, .doortime-showtime').first().text();
+        const stMatch = showtime.match(/(\d{1,2}:?\d{0,2}\s*(?:AM|PM|am|pm))/);
+        const time = stMatch ? this.parseTime(stMatch[1]) : null;
 
-        const priceText = $el.find('.seetickets-list-event-price, .price').first().text().trim();
-        const price = priceText.match(/\$[\d.]+(?:\s*[-–]\s*\$[\d.]+)?/)?.[0] || null;
+        const priceMatch = $el.find('.price').first().text().match(/\$\d+(?:\.\d+)?(?:-\$\d+(?:\.\d+)?)?/);
+        const img = $el.find('img').first().attr('src') || null;
+        const href = $titleA.attr('href') || '';
 
-        // Check src, data-src, AND data-lazy-src for images
-        const imgEl = $el.find('img').first();
-        const img = imgEl.attr('src') || imgEl.attr('data-src') || imgEl.attr('data-lazy-src') || null;
-
-        const link = $el.find('a.seetickets-buy-btn, a[href*="seetickets"]').first().attr('href') ||
-                     $el.find('a').first().attr('href') || '';
-        const soldOut = /sold\s*out/i.test($el.text());
+        const key = `${title}|${date}`;
+        if (seen.has(key)) return;
+        seen.add(key);
 
         events.push(this.makeEvent({
           title,
           date,
-          time: showTimeMatch ? this.parseTime(showTimeMatch[1]) : null,
-          price,
-          sold_out: soldOut,
-          image_url: img ? (img.startsWith('http') ? img : new URL(img, this.venue.url).href) : null,
-          event_url: link ? (link.startsWith('http') ? link : new URL(link, this.venue.url).href) : this.venue.url,
+          time,
+          price: priceMatch ? priceMatch[0] : null,
+          image_url: img,
+          event_url: href || this.venue.url,
         }));
       } catch {}
     });

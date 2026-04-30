@@ -2,40 +2,37 @@ import * as cheerio from 'cheerio';
 import { BaseScraper, scrapeWithPuppeteer } from '../base';
 import { Event } from '../../types';
 
+// Young Ethel's events page renders a two-level <ul>: outer <li> per day with
+// a <time aria-label="Thursday, April 30th"> and an inner <ul> of show items,
+// each show being an inner <li> with <time aria-label="7pm"> and a span title.
 export class YoungEthelsScraper extends BaseScraper {
   async scrape(): Promise<Event[]> {
-    const html = await scrapeWithPuppeteer(this.venue.url, 'ul, .event, article');
+    const html = await scrapeWithPuppeteer(this.venue.url, 'time[datetime]');
     const $ = cheerio.load(html);
     const events: Event[] = [];
 
-    // Young Ethel's uses Next.js with semantic HTML
-    $('li, article, .event-item, [class*="event"]').each((_, el) => {
-      try {
-        const $el = $(el);
-        const title = $el.find('h2, h3, h4, .title').first().text().trim();
-        if (!title || title.length < 3) return;
+    // Find day-level <li>s — they have a direct <time> child plus a nested <ul>.
+    $('li').each((_, dayEl) => {
+      const $day = $(dayEl);
+      const $dayTime = $day.children('time[datetime]').first();
+      if (!$dayTime.length) return;
+      const dayIso = $dayTime.attr('datetime') || '';
+      const date = this.parseDate(dayIso);
+      if (!date) return;
 
-        // Look for time element with datetime attribute
-        const timeEl = $el.find('time').first();
-        const datetime = timeEl.attr('datetime') || '';
-        const date = this.parseDate(datetime);
-        if (!date) return;
-
-        const timeText = timeEl.text().trim();
-        const text = $el.text();
-        const priceMatch = text.match(/\$(\d+)/);
-        const img = $el.find('img').first().attr('src') || null;
-        const link = $el.find('a').first().attr('href') || '';
-
+      $day.find('ul li').each((_, showEl) => {
+        const $show = $(showEl);
+        const $showTime = $show.children('time').first();
+        const timeLabel = $showTime.attr('aria-label') || $showTime.text().trim();
+        const title = $show.find('span').first().text().replace(/\s+/g, ' ').trim();
+        if (!title) return;
         events.push(this.makeEvent({
           title,
           date,
-          time: timeText ? this.parseTime(timeText) : null,
-          price: priceMatch ? `$${priceMatch[1]}` : null,
-          image_url: img,
-          event_url: link ? new URL(link, this.venue.url).href : this.venue.url,
+          time: this.parseTime(timeLabel),
+          event_url: this.venue.url,
         }));
-      } catch {}
+      });
     });
 
     return events;

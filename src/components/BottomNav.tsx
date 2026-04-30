@@ -22,6 +22,15 @@ const tabs = [
       </svg>
     ),
   },
+  {
+    href: '/venues',
+    label: 'Venues',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0L6.343 16.657a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+  },
 ];
 
 export default function BottomNav() {

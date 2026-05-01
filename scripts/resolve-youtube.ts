@@ -67,17 +67,24 @@ async function dismissConsent(page: Page) {
 async function resolveOne(page: Page, artist: string): Promise<string | null> {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(artist)}`;
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
-  // The first "videoId":"abc..." in the inline JSON is the top result.
+  // We must scope to "videoRenderer" — that's the JSON wrapper for an
+  // organic result. The naked "videoId" pattern also matches the promoted
+  // ad slot at the top of the page, which on most queries was YouTube's
+  // currently-promoted video (NKOTB Vegas residency etc.) and therefore
+  // collapsed dozens of unrelated artists onto the same cached ID.
   const videoId = await page.evaluate(() => {
-    const scripts = Array.from(document.querySelectorAll('script'));
-    for (const s of scripts) {
-      const m = s.textContent?.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
-      if (m) return m[1];
-    }
-    // Fallback: inspect anchor href on rendered cards.
-    const anchor = document.querySelector('a[href^="/watch?v="]') as HTMLAnchorElement | null;
-    if (anchor) {
-      const m = anchor.href.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+    const html = document.documentElement.outerHTML;
+    const renderer = html.match(/"videoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})"/);
+    if (renderer) return renderer[1];
+    const compact = html.match(/"compactVideoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})"/);
+    if (compact) return compact[1];
+    // Last-resort fallback: the first /watch?v= anchor on the rendered
+    // page. We accept this only if it isn't the promoted card —
+    // ytd-promoted-* and ad-slot-renderer wrap promoted anchors.
+    const anchors = Array.from(document.querySelectorAll('a[href^="/watch?v="]')) as HTMLAnchorElement[];
+    for (const a of anchors) {
+      if (a.closest('ytd-promoted-sparkles-web-renderer, ytd-ad-slot-renderer, [class*="promoted"], [class*="-ad-"]')) continue;
+      const m = a.href.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
       if (m) return m[1];
     }
     return null;

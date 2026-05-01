@@ -64,7 +64,7 @@ export const VENUES: VenueConfig[] = [
   { name: 'Murmrr', slug: 'murmrr', url: 'https://murmrr.com/', category: 'music', neighborhood: 'Gowanus',
     group: "What's Happening in Gowanus", groupOrder: 1, venueOrder: 6,
     walkMinutes: 14, transitMinutes: null, drinkPrice: 12 },
-  { name: 'Heights Players', slug: 'heightsplayers', url: 'https://www.heightsplayers.org/box-office', category: 'theater', neighborhood: 'Brooklyn Heights',
+  { name: 'Heights Players', slug: 'heightsplayers', url: 'https://www.onthestage.tickets/the-heights-players', category: 'theater', neighborhood: 'Brooklyn Heights',
     group: "What's Happening in Gowanus", groupOrder: 1, venueOrder: 7,
     walkMinutes: 18, transitMinutes: null, drinkPrice: 0 },
 
@@ -72,7 +72,7 @@ export const VENUES: VenueConfig[] = [
   { name: 'Lucky 13 Saloon', slug: 'lucky13', url: 'https://www.lucky13saloon.com/events', category: 'music', neighborhood: 'Park Slope',
     group: 'Bars with Bands', groupOrder: 2, venueOrder: 1,
     walkMinutes: 12, transitMinutes: null, drinkPrice: 7 },
-  { name: 'Barbès', slug: 'barbes', url: 'https://www.barbesbrooklyn.com/events', category: 'music', neighborhood: 'Park Slope',
+  { name: 'Barbès', slug: 'barbes', url: 'https://www.viewcy.com/barbes', category: 'music', neighborhood: 'Park Slope',
     group: 'Bars with Bands', groupOrder: 2, venueOrder: 2,
     walkMinutes: 15, transitMinutes: null, drinkPrice: 8 },
 
@@ -80,13 +80,13 @@ export const VENUES: VenueConfig[] = [
   { name: 'Public Records', slug: 'publicrecords', url: 'https://dice.fm/venue/public-records-w2qg', category: 'music', neighborhood: 'Gowanus',
     group: 'Long Shots', groupOrder: 3, venueOrder: 1,
     walkMinutes: 10, transitMinutes: null, drinkPrice: 15 },
-  { name: 'Jalopy Theatre', slug: 'jalopy', url: 'https://jalopytheatre.netlify.app/performances', category: 'music', neighborhood: 'Red Hook',
+  { name: 'Jalopy Theatre', slug: 'jalopy', url: 'https://www.viewcy.com/jalopytheatre', category: 'music', neighborhood: 'Red Hook',
     group: 'Long Shots', groupOrder: 3, venueOrder: 2,
     walkMinutes: 25, transitMinutes: null, drinkPrice: 8 },
   { name: "Young Ethel's", slug: 'youngethels', url: 'https://www.youngethels.com/events', category: 'music', neighborhood: 'Williamsburg',
     group: 'Long Shots', groupOrder: 3, venueOrder: 3,
     walkMinutes: 50, transitMinutes: 22, drinkPrice: 10 },
-  { name: 'HERE Arts Center', slug: 'here', url: 'https://ci.ovationtix.com/27285', category: 'theater', neighborhood: 'SoHo',
+  { name: 'HERE Arts Center', slug: 'here', url: 'https://here.org/shows/', category: 'theater', neighborhood: 'SoHo',
     group: 'Long Shots', groupOrder: 3, venueOrder: 4,
     walkMinutes: 55, transitMinutes: 30, drinkPrice: 14 },
 

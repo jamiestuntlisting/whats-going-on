@@ -127,3 +127,58 @@ export async function scrapeWithPuppeteer(url: string, waitSelector?: string): P
     await page.close();
   }
 }
+
+interface PuppeteerLoadOpts {
+  /** CSS selector to wait for before reading the DOM. */
+  waitSelector?: string;
+  /** Wait until this many matches of `countSelector` are visible (best-effort). */
+  countSelector?: string;
+  minCount?: number;
+  /** Trigger lazy-loaded cards by scrolling N times to the bottom. */
+  scrollPasses?: number;
+  /** Extra ms to settle after scrolling completes. */
+  settleMs?: number;
+  /** Total wait budget (ms) for the count condition. */
+  countTimeoutMs?: number;
+}
+
+// Like scrapeWithPuppeteer, but for SPA pages that mount cards over time
+// and may need scrolling to reveal them all.
+export async function scrapeSpaWithPuppeteer(
+  url: string,
+  opts: PuppeteerLoadOpts = {},
+): Promise<string> {
+  const browser = await getPuppeteerBrowser();
+  const page = await browser.newPage();
+  await page.setUserAgent(USER_AGENT);
+  try {
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    if (opts.waitSelector) {
+      await page.waitForSelector(opts.waitSelector, { timeout: 10000 }).catch(() => {});
+    }
+
+    // Scroll to bottom in passes to trigger virtual-scroll / lazy-load.
+    // We deliberately do *not* scroll back to top: some lists virtualize
+    // off-screen cards out of the DOM, and we want the full set captured.
+    const passes = opts.scrollPasses ?? 4;
+    for (let i = 0; i < passes; i++) {
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await new Promise(r => setTimeout(r, 700));
+    }
+
+    // Wait for the count condition if provided.
+    if (opts.countSelector && opts.minCount && opts.minCount > 1) {
+      const deadline = Date.now() + (opts.countTimeoutMs ?? 8000);
+      while (Date.now() < deadline) {
+        const n = await page.evaluate(s => document.querySelectorAll(s).length, opts.countSelector);
+        if (n >= opts.minCount) break;
+        await new Promise(r => setTimeout(r, 400));
+      }
+    }
+
+    await new Promise(r => setTimeout(r, opts.settleMs ?? 1500));
+    return await page.content();
+  } finally {
+    await page.close();
+  }
+}

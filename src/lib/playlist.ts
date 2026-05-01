@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { Event, getVenueConfig } from './types';
 import { getAllEvents } from './events-data';
 
@@ -14,6 +16,28 @@ export interface PlaylistArtist {
   appearances: ArtistAppearance[];
   effectiveMinutes: number; // closest appearance, used for ordering within section
   walkOnly: boolean;        // true if any appearance is at a walk-only venue
+  videoId: string | null;   // top YouTube search result, populated by scripts/resolve-youtube.ts
+}
+
+// YouTube ID cache, written by scripts/resolve-youtube.ts. Loaded lazily.
+type YoutubeCache = Record<string, { videoId: string | null; resolvedAt: string }>;
+const YT_CACHE_PATH = path.join(process.cwd(), 'public', 'youtube-ids.json');
+let youtubeCache: YoutubeCache | null = null;
+
+function loadYoutubeCache(): YoutubeCache {
+  if (youtubeCache) return youtubeCache;
+  try {
+    youtubeCache = JSON.parse(fs.readFileSync(YT_CACHE_PATH, 'utf-8'));
+  } catch {
+    youtubeCache = {};
+  }
+  return youtubeCache!;
+}
+
+function lookupVideoId(artist: string): string | null {
+  const c = loadYoutubeCache();
+  const entry = c[artist.toLowerCase().trim()];
+  return entry?.videoId ?? null;
 }
 
 export interface PlaylistSection {
@@ -150,6 +174,21 @@ export function youtubeMusicSearchUrl(query: string): string {
   return `https://music.youtube.com/search?q=${encodeURIComponent(query)}`;
 }
 
+// Direct watch URL for one resolved artist.
+export function youtubeWatchUrl(videoId: string): string {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+// Build a real ad-hoc playlist URL from a list of video IDs. YouTube redirects
+// it to a temporary playlist (TLGG... id) that auto-advances through *only*
+// these videos — no algorithmic drift. Cap at 50 IDs since longer URLs
+// sometimes fail to materialize the playlist.
+export function youtubeWatchVideosUrl(videoIds: string[]): string | null {
+  const clean = videoIds.filter(Boolean).slice(0, 50);
+  if (clean.length === 0) return null;
+  return `https://www.youtube.com/watch_videos?video_ids=${clean.join(',')}`;
+}
+
 export function getPlaylistSections(daysAhead = 14): PlaylistSection[] {
   const today = new Date().toISOString().split('T')[0];
   const horizon = new Date();
@@ -188,6 +227,7 @@ export function getPlaylistSections(daysAhead = 14): PlaylistSection[] {
           appearances: [appearance],
           effectiveMinutes: eff,
           walkOnly: isWalkOnly,
+          videoId: lookupVideoId(artist),
         });
       }
     }

@@ -31,6 +31,18 @@ function youtubeMusicSearch(query: string): string {
   return `https://music.youtube.com/search?q=${encodeURIComponent(query)}`;
 }
 
+function youtubeWatch(videoId: string): string {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+// Real YouTube playlist URL — only contains the IDs you give it. Cap at 50,
+// the practical max for the watch_videos endpoint.
+function youtubeWatchVideosUrl(videoIds: string[]): string | null {
+  const clean = videoIds.filter(Boolean).slice(0, 50);
+  if (clean.length === 0) return null;
+  return `https://www.youtube.com/watch_videos?video_ids=${clean.join(',')}`;
+}
+
 interface Props {
   sections: PlaylistSection[];
   todayYmd: string;
@@ -237,16 +249,40 @@ export default function PlaylistClient({ sections, todayYmd, daysAhead }: Props)
                     {section.description}
                   </p>
                 </div>
-                <a
-                  href={youtubeMusicSearch(
-                    section.artists.slice(0, 12).map(a => a.name).join(' | '),
-                  )}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 text-[11px] font-medium px-3 py-1.5 rounded-full bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-90"
-                >
-                  Search all ▶
-                </a>
+                {(() => {
+                  // Build the playlist URL out of the artists currently visible
+                  // in this section (after filters/decision tab) — that way
+                  // "Play all" matches what's on screen.
+                  const ids = section.artists
+                    .map(a => a.videoId)
+                    .filter((x): x is string => !!x);
+                  const playlistUrl = youtubeWatchVideosUrl(ids);
+                  if (playlistUrl) {
+                    return (
+                      <a
+                        href={playlistUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 text-[11px] font-medium px-3 py-1.5 rounded-full bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-90"
+                      >
+                        ▶ Play all ({ids.length})
+                      </a>
+                    );
+                  }
+                  // Fallback: no resolved IDs, link to a search of all artist names.
+                  return (
+                    <a
+                      href={youtubeMusicSearch(
+                        section.artists.slice(0, 12).map(a => a.name).join(' | '),
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 text-[11px] font-medium px-3 py-1.5 rounded-full bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                    >
+                      Search all ▶
+                    </a>
+                  );
+                })()}
               </div>
 
               <ul className="flex flex-col gap-1.5">
@@ -265,12 +301,19 @@ export default function PlaylistClient({ sections, todayYmd, daysAhead }: Props)
                       className="flex items-start gap-2 p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
                     >
                       <a
-                        href={youtubeMusicSearch(artist.name)}
+                        href={artist.videoId ? youtubeWatch(artist.videoId) : youtubeMusicSearch(artist.name)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex-1 min-w-0 -m-1 p-1 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                       >
-                        <div className="font-medium truncate">{artist.name}</div>
+                        <div className="font-medium truncate">
+                          {artist.name}
+                          {!artist.videoId && (
+                            <span className="ml-1.5 text-[9px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500 align-middle">
+                              search
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 space-y-0.5">
                           {showAppearances.slice(0, 3).map((a, i) => (
                             <div key={i} className="truncate">

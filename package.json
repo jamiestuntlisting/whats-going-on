@@ -7,7 +7,9 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "scrape": "tsx scripts/scrape.ts"
+    "scrape": "tsx scripts/scrape.ts && tsx scripts/resolve-youtube.ts",
+    "scrape:events": "tsx scripts/scrape.ts",
+    "scrape:youtube": "tsx scripts/resolve-youtube.ts"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

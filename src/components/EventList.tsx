@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import SwipeableEvent from './SwipeableEvent';
 import CategoryFilter from './CategoryFilter';
 import DateNav from './DateNav';
-import { loadDismissed, saveDismissed } from '@/lib/dismissed';
+import { useDecisions, getDecision, type Decision } from '@/lib/decisions';
 
 interface EnrichedEvent {
   id: string;
@@ -27,21 +27,23 @@ interface EnrichedEvent {
   group: string;
 }
 
+type ViewMode = 'undecided' | 'saved' | 'dismissed';
+
+const VIEW_TABS: { id: ViewMode; label: string }[] = [
+  { id: 'undecided', label: 'Undecided' },
+  { id: 'saved', label: '★ Saved' },
+  { id: 'dismissed', label: 'Skipped' },
+];
+
 export default function EventList() {
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState('all');
+  const [view, setView] = useState<ViewMode>('undecided');
   const [events, setEvents] = useState<EnrichedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastScrape, setLastScrape] = useState<string | null>(null);
 
-  // Dismissed event IDs from localStorage
-  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
-  const [dismissedHydrated, setDismissedHydrated] = useState(false);
-
-  useEffect(() => {
-    setDismissed(loadDismissed());
-    setDismissedHydrated(true);
-  }, []);
+  const { maps, hydrated, set: setDecision, counts } = useDecisions();
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -61,25 +63,35 @@ export default function EventList() {
     fetchEvents();
   }, [fetchEvents]);
 
-  const handleDismiss = useCallback((id: string) => {
-    setDismissed(prev => {
-      const next = new Set(prev);
-      next.add(id);
-      saveDismissed(next);
-      return next;
+  const handleDecide = useCallback((id: string, decision: Decision) => {
+    setDecision('event', id, decision);
+  }, [setDecision]);
+
+  // Filter by current view: undecided / saved / dismissed
+  const visibleEvents = useMemo(() => {
+    if (!hydrated) return events;
+    return events.filter(e => {
+      const d = getDecision(maps, 'event', e.id);
+      if (view === 'undecided') return d == null;
+      if (view === 'saved') return d === 'yes';
+      return d === 'no';
     });
-  }, []);
+  }, [events, maps, view, hydrated]);
 
-  const handleRestoreAll = useCallback(() => {
-    setDismissed(new Set());
-    saveDismissed(new Set());
-  }, []);
-
-  const visibleEvents = useMemo(
-    () => (dismissedHydrated ? events.filter(e => !dismissed.has(e.id)) : events),
-    [events, dismissed, dismissedHydrated],
+  const undecidedCount = useMemo(
+    () => events.filter(e => getDecision(maps, 'event', e.id) == null).length,
+    [events, maps],
   );
-  const hiddenCount = events.length - visibleEvents.length;
+  const savedCount = useMemo(
+    () => events.filter(e => getDecision(maps, 'event', e.id) === 'yes').length,
+    [events, maps],
+  );
+  const dismissedCount = useMemo(
+    () => events.filter(e => getDecision(maps, 'event', e.id) === 'no').length,
+    [events, maps],
+  );
+  const tabCount = (id: ViewMode) =>
+    id === 'undecided' ? undecidedCount : id === 'saved' ? savedCount : dismissedCount;
 
   const scrapeAge = lastScrape
     ? Math.round((Date.now() - new Date(lastScrape).getTime()) / (1000 * 60))
@@ -90,7 +102,29 @@ export default function EventList() {
       <DateNav date={date} onChange={setDate} />
       <CategoryFilter selected={category} onChange={setCategory} />
 
-      {/* Status row: freshness + restore-dismissed */}
+      {/* View tabs: Undecided / Saved / Skipped */}
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {VIEW_TABS.map(t => {
+          const active = view === t.id;
+          const c = tabCount(t.id);
+          return (
+            <button
+              key={t.id}
+              onClick={() => setView(t.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                active
+                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                  : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+              }`}
+            >
+              {t.label}
+              {c > 0 && <span className="ml-1.5 opacity-70">{c}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Freshness + global counts */}
       <div className="flex items-center justify-between text-xs text-zinc-400">
         <span>
           {scrapeAge !== null
@@ -101,13 +135,10 @@ export default function EventList() {
                 : `Updated ${Math.round(scrapeAge / (60 * 24))}d ago`
             : 'No data yet'}
         </span>
-        {hiddenCount > 0 && (
-          <button
-            onClick={handleRestoreAll}
-            className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 underline-offset-2 hover:underline"
-          >
-            Show {hiddenCount} dismissed
-          </button>
+        {hydrated && (counts.eventYes > 0 || counts.eventNo > 0) && (
+          <span>
+            {counts.eventYes} saved · {counts.eventNo} skipped
+          </span>
         )}
       </div>
 
@@ -127,25 +158,36 @@ export default function EventList() {
         </div>
       ) : visibleEvents.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-4xl mb-3">🤷</p>
+          <p className="text-4xl mb-3">{view === 'saved' ? '✨' : view === 'dismissed' ? '🪦' : '🤷'}</p>
           <p className="text-zinc-500 dark:text-zinc-400 font-medium">
-            {events.length === 0 ? 'No events found' : 'All events dismissed'}
+            {events.length === 0
+              ? 'No events found'
+              : view === 'saved'
+                ? 'Nothing saved yet for this date'
+                : view === 'dismissed'
+                  ? 'Nothing skipped yet'
+                  : 'All caught up — every event has a decision'}
           </p>
           <p className="text-zinc-400 dark:text-zinc-500 text-sm mt-1">
             {events.length === 0
               ? lastScrape
                 ? 'Try a different date or category'
                 : 'No events loaded yet — run `npm run scrape` locally and commit public/events.json'
-              : 'Tap "Show dismissed" above to bring them back'}
+              : view === 'saved'
+                ? 'Swipe right on any event to save it'
+                : view === 'dismissed'
+                  ? 'Swipe left to skip events you do not want to see'
+                  : 'Tap "★ Saved" to see what you picked'}
           </p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-zinc-400 font-medium">
-            {visibleEvents.length} event{visibleEvents.length !== 1 ? 's' : ''} (closest first)
+            {visibleEvents.length} event{visibleEvents.length !== 1 ? 's' : ''}
+            {view === 'undecided' ? ' (closest first)' : ''}
           </p>
           {visibleEvents.map(event => (
-            <SwipeableEvent key={event.id} event={event} onDismiss={handleDismiss} />
+            <SwipeableEvent key={event.id} event={event} onDecide={handleDecide} />
           ))}
         </div>
       )}

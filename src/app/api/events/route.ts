@@ -3,23 +3,26 @@ import { getEventsByDate, getEventsInRange, getEventDatesInMonth, getLastScrapeT
 import { Event, getVenueConfig, SUBWAY_FARE } from '@/lib/types';
 import { getSettings } from '@/lib/settings';
 
-// Sort events by group order → venue order within group → time
-function sortByGroupAndDistance(events: Event[]): Event[] {
+// Effective travel time from home: subway when defined (faster path),
+// otherwise walking. Used as the primary sort key so distant events sink
+// to the bottom of the list.
+function effectiveMinutes(slug: string): number {
+  const v = getVenueConfig(slug);
+  if (!v) return 999;
+  return v.transitMinutes ?? v.walkMinutes;
+}
+
+// Sort events by effective travel time → time → title.
+// Primary key (distance) addresses GitHub issue #5: distant events at the end.
+function sortByDistance(events: Event[]): Event[] {
   return events.sort((a, b) => {
-    const va = getVenueConfig(a.venue_slug);
-    const vb = getVenueConfig(b.venue_slug);
-    const groupA = va?.groupOrder ?? 99;
-    const groupB = vb?.groupOrder ?? 99;
-    if (groupA !== groupB) return groupA - groupB;
-
-    const venueA = va?.venueOrder ?? 99;
-    const venueB = vb?.venueOrder ?? 99;
-    if (venueA !== venueB) return venueA - venueB;
-
-    // Same venue — sort by time
+    const ma = effectiveMinutes(a.venue_slug);
+    const mb = effectiveMinutes(b.venue_slug);
+    if (ma !== mb) return ma - mb;
     const timeA = a.time || 'ZZ';
     const timeB = b.time || 'ZZ';
-    return timeA.localeCompare(timeB);
+    if (timeA !== timeB) return timeA.localeCompare(timeB);
+    return a.title.localeCompare(b.title);
   });
 }
 
@@ -84,12 +87,12 @@ export async function GET(request: NextRequest) {
 
   // Get events in a date range
   if (startDate && endDate) {
-    const events = sortByGroupAndDistance(getEventsInRange(startDate, endDate));
+    const events = sortByDistance(getEventsInRange(startDate, endDate));
     return Response.json({ events: enrichEvents(events), lastScrape, homeAddress: settings.homeAddress });
   }
 
   // Get events for a specific date
   const targetDate = date || new Date().toISOString().split('T')[0];
-  const events = sortByGroupAndDistance(getEventsByDate(targetDate, category));
+  const events = sortByDistance(getEventsByDate(targetDate, category));
   return Response.json({ events: enrichEvents(events), lastScrape, homeAddress: settings.homeAddress });
 }

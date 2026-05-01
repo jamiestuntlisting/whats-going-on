@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import EventCard from './EventCard';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import SwipeableEvent from './SwipeableEvent';
 import CategoryFilter from './CategoryFilter';
 import DateNav from './DateNav';
+import { loadDismissed, saveDismissed } from '@/lib/dismissed';
 
 interface EnrichedEvent {
   id: string;
@@ -33,6 +34,15 @@ export default function EventList() {
   const [loading, setLoading] = useState(true);
   const [lastScrape, setLastScrape] = useState<string | null>(null);
 
+  // Dismissed event IDs from localStorage
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
+  const [dismissedHydrated, setDismissedHydrated] = useState(false);
+
+  useEffect(() => {
+    setDismissed(loadDismissed());
+    setDismissedHydrated(true);
+  }, []);
+
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
@@ -51,28 +61,37 @@ export default function EventList() {
     fetchEvents();
   }, [fetchEvents]);
 
+  const handleDismiss = useCallback((id: string) => {
+    setDismissed(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      saveDismissed(next);
+      return next;
+    });
+  }, []);
+
+  const handleRestoreAll = useCallback(() => {
+    setDismissed(new Set());
+    saveDismissed(new Set());
+  }, []);
+
+  const visibleEvents = useMemo(
+    () => (dismissedHydrated ? events.filter(e => !dismissed.has(e.id)) : events),
+    [events, dismissed, dismissedHydrated],
+  );
+  const hiddenCount = events.length - visibleEvents.length;
+
   const scrapeAge = lastScrape
     ? Math.round((Date.now() - new Date(lastScrape).getTime()) / (1000 * 60))
     : null;
-
-  // Group events by their group name, preserving API sort order
-  const groupedEvents: { group: string; events: EnrichedEvent[] }[] = [];
-  let currentGroup = '';
-  for (const event of events) {
-    if (event.group !== currentGroup) {
-      currentGroup = event.group;
-      groupedEvents.push({ group: currentGroup, events: [] });
-    }
-    groupedEvents[groupedEvents.length - 1].events.push(event);
-  }
 
   return (
     <div className="flex flex-col gap-4">
       <DateNav date={date} onChange={setDate} />
       <CategoryFilter selected={category} onChange={setCategory} />
 
-      {/* Scrape status */}
-      <div className="flex items-center text-xs text-zinc-400">
+      {/* Status row: freshness + restore-dismissed */}
+      <div className="flex items-center justify-between text-xs text-zinc-400">
         <span>
           {scrapeAge !== null
             ? scrapeAge < 60
@@ -82,6 +101,14 @@ export default function EventList() {
                 : `Updated ${Math.round(scrapeAge / (60 * 24))}d ago`
             : 'No data yet'}
         </span>
+        {hiddenCount > 0 && (
+          <button
+            onClick={handleRestoreAll}
+            className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 underline-offset-2 hover:underline"
+          >
+            Show {hiddenCount} dismissed
+          </button>
+        )}
       </div>
 
       {/* Events */}
@@ -98,29 +125,27 @@ export default function EventList() {
             </div>
           ))}
         </div>
-      ) : events.length === 0 ? (
+      ) : visibleEvents.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-4xl mb-3">🤷</p>
-          <p className="text-zinc-500 dark:text-zinc-400 font-medium">No events found</p>
+          <p className="text-zinc-500 dark:text-zinc-400 font-medium">
+            {events.length === 0 ? 'No events found' : 'All events dismissed'}
+          </p>
           <p className="text-zinc-400 dark:text-zinc-500 text-sm mt-1">
-            {lastScrape ? 'Try a different date or category' : 'No events loaded yet — run `npm run scrape` locally and commit public/events.json'}
+            {events.length === 0
+              ? lastScrape
+                ? 'Try a different date or category'
+                : 'No events loaded yet — run `npm run scrape` locally and commit public/events.json'
+              : 'Tap "Show dismissed" above to bring them back'}
           </p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          <p className="text-xs text-zinc-400 font-medium">{events.length} event{events.length !== 1 ? 's' : ''}</p>
-          {groupedEvents.map(({ group, events: groupEvents }) => (
-            <div key={group} className="flex flex-col gap-2">
-              {/* Group header */}
-              <div className="sticky top-0 z-10 pt-2 pb-1 -mx-1 px-1 bg-zinc-50/90 dark:bg-zinc-950/90 backdrop-blur-sm">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  {group}
-                </h3>
-              </div>
-              {groupEvents.map((event) => (
-                <EventCard key={event.id} event={event} />
-              ))}
-            </div>
+          <p className="text-xs text-zinc-400 font-medium">
+            {visibleEvents.length} event{visibleEvents.length !== 1 ? 's' : ''} (closest first)
+          </p>
+          {visibleEvents.map(event => (
+            <SwipeableEvent key={event.id} event={event} onDismiss={handleDismiss} />
           ))}
         </div>
       )}

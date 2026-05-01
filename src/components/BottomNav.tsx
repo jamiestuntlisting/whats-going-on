@@ -31,6 +31,15 @@ const tabs = [
       </svg>
     ),
   },
+  {
+    href: '/playlist',
+    label: 'Playlist',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3zM21 16c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3z" />
+      </svg>
+    ),
+  },
 ];
 
 export default function BottomNav() {

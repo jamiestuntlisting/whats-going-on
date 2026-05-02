@@ -1,52 +1,59 @@
-import * as cheerio from 'cheerio';
-import { BaseScraper, scrapeWithPuppeteer } from '../base';
+import { BaseScraper } from '../base';
 import { Event } from '../../types';
+
+interface JsonLdItem {
+  '@type'?: string;
+  name?: string;
+  startDate?: string;
+  url?: string;
+  image?: string;
+  description?: string;
+}
+
+interface JsonLdListEntry {
+  item?: JsonLdItem;
+}
+
+interface JsonLdList {
+  itemListElement?: JsonLdListEntry[];
+}
 
 export class LittlefieldScraper extends BaseScraper {
   async scrape(): Promise<Event[]> {
-    const html = await scrapeWithPuppeteer(this.venue.url, '.event, .show, article');
-    const $ = cheerio.load(html);
+    const $ = await this.fetchHtml(this.venue.url);
     const events: Event[] = [];
 
-    // Littlefield uses WordPress Divi theme
-    $('article, .et_pb_post, .event-item, .show-item, a[href*="event"]').each((_, el) => {
+    $('script[type="application/ld+json"]').each((_, el) => {
+      const raw = $(el).contents().text();
+      if (!raw.includes('itemListElement')) return;
+      let parsed: unknown;
       try {
-        const $el = $(el);
-        const title = $el.find('h2, h3, .entry-title, .event-title').first().text().trim() ||
-                      $el.find('img').attr('alt')?.trim() || '';
-        if (!title || title.length < 3) return;
+        parsed = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      const lists: JsonLdList[] = Array.isArray(parsed)
+        ? (parsed as JsonLdList[])
+        : [parsed as JsonLdList];
 
-        const text = $el.text();
-        const link = $el.attr('href') || $el.find('a').first().attr('href') || '';
-        const img = $el.find('img').first().attr('src') || null;
+      for (const list of lists) {
+        for (const entry of list.itemListElement ?? []) {
+          const item = entry.item;
+          if (!item || item['@type'] !== 'Event') continue;
+          const title = item.name?.trim();
+          // Take date portion verbatim; avoids local-tz roundtrip on naive datetimes.
+          const date = item.startDate ? item.startDate.split('T')[0] : null;
+          if (!title || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
 
-        // Parse date from text
-        const dateMatch = text.match(/(\w+),?\s+(\w+)\s+(\d{1,2}),?\s*(\d{4})?/) ||
-                          text.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
-        let date: string | null = null;
-        if (dateMatch) {
-          const fullText = dateMatch[0];
-          const d = new Date(fullText);
-          if (!isNaN(d.getTime())) {
-            date = d.toISOString().split('T')[0];
-          }
+          events.push(this.makeEvent({
+            title,
+            date,
+            image_url: item.image ?? null,
+            event_url: item.url ?? null,
+            description: item.description ?? null,
+          }));
         }
-        if (!date) return;
-
-        const timeMatch = text.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM))/);
-        const priceMatch = text.match(/\$(\d+(?:\.\d{2})?)/);
-        const soldOut = /sold\s*out/i.test(text);
-
-        events.push(this.makeEvent({
-          title,
-          date,
-          time: timeMatch ? this.parseTime(timeMatch[1]) : null,
-          price: priceMatch ? `$${priceMatch[1]}` : null,
-          sold_out: soldOut,
-          image_url: img,
-          event_url: link ? (link.startsWith('http') ? link : new URL(link, this.venue.url).href) : this.venue.url,
-        }));
-      } catch {}
+      }
     });
 
     return events;

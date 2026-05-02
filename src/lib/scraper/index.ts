@@ -1,5 +1,5 @@
 import { Event, VENUES, VenueConfig } from '../types';
-import { closePuppeteerBrowser } from './base';
+import { closePuppeteerBrowser, closeStealthBrowser } from './base';
 
 // Import all scrapers
 import { LittlefieldScraper } from './venues/littlefield';
@@ -65,8 +65,8 @@ export async function scrapeAllVenues(
 ): Promise<ScrapeResult[]> {
   const results: ScrapeResult[] = [];
 
-  const serverRendered = ['eastville', 'lortel', 'galleryplayers', 'lucky13', 'halyards'];
-  const puppeteerBased = ['littlefield', 'bellhouse', 'unionhall', 'murmrr', 'heightsplayers', 'barbes', 'publicrecords', 'youngethels', 'jalopy', 'here', 'ucb', 'brooklyncc', 'secondcity', 'magnet', 'caveat', 'nitehawkwilliamsburg', 'nitehawkprospectpark', 'alamobrooklyn'];
+  const serverRendered = ['eastville', 'lortel', 'galleryplayers', 'lucky13', 'halyards', 'littlefield'];
+  const puppeteerBased = ['bellhouse', 'unionhall', 'murmrr', 'heightsplayers', 'barbes', 'publicrecords', 'youngethels', 'jalopy', 'here', 'ucb', 'brooklyncc', 'secondcity', 'magnet', 'caveat', 'nitehawkwilliamsburg', 'nitehawkprospectpark', 'alamobrooklyn'];
 
   const serverVenues = VENUES.filter(v => serverRendered.includes(v.slug));
   const serverResults = await Promise.allSettled(
@@ -110,6 +110,6 @@ export async function scrapeAllVenues(
     }
   }
 
-  await closePuppeteerBrowser();
+  await Promise.all([closePuppeteerBrowser(), closeStealthBrowser()]);
   return results;
 }

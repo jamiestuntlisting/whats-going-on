@@ -7,18 +7,28 @@ interface EventsFile {
   scrapedAt: string | null;
 }
 
-const DATA_PATH = path.join(process.cwd(), 'public', 'events.json');
+// Try cwd-relative first (Vercel, `next dev` from project root). Fall back to
+// wrapper-style local layouts where cwd is one level up from the project.
+const CANDIDATE_PATHS = [
+  path.join(process.cwd(), 'public', 'events.json'),
+  path.join(process.cwd(), 'whats-going-on', 'public', 'events.json'),
+];
 
 let cached: EventsFile | null = null;
 
 function load(): EventsFile {
   if (cached) return cached;
-  try {
-    const raw = fs.readFileSync(DATA_PATH, 'utf-8');
-    cached = JSON.parse(raw) as EventsFile;
-  } catch {
-    cached = { events: [], scrapedAt: null };
+  for (const p of CANDIDATE_PATHS) {
+    try {
+      const raw = fs.readFileSync(p, 'utf-8');
+      cached = JSON.parse(raw) as EventsFile;
+      return cached;
+    } catch {
+      // try next candidate
+    }
   }
+  console.error('[events-data] events.json not found in any candidate path:', CANDIDATE_PATHS);
+  cached = { events: [], scrapedAt: null };
   return cached;
 }
 

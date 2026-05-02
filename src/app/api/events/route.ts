@@ -12,10 +12,14 @@ function effectiveMinutes(slug: string): number {
   return v.transitMinutes ?? v.walkMinutes;
 }
 
-// Sort events by effective travel time → time → title.
-// Primary key (distance) addresses GitHub issue #5: distant events at the end.
+// Sort events by venue priority tier → effective travel time → time → title.
+// Priority tier reflects user preference (top picks > cinema > others); distance
+// is the tie-breaker within a tier.
 function sortByDistance(events: Event[]): Event[] {
   return events.sort((a, b) => {
+    const pa = getVenueConfig(a.venue_slug)?.priority ?? 99;
+    const pb = getVenueConfig(b.venue_slug)?.priority ?? 99;
+    if (pa !== pb) return pa - pb;
     const ma = effectiveMinutes(a.venue_slug);
     const mb = effectiveMinutes(b.venue_slug);
     if (ma !== mb) return ma - mb;

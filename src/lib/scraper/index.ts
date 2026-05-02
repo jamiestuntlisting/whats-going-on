@@ -23,6 +23,11 @@ import { LortelScraper } from './venues/lortel';
 import { GalleryPlayersScraper } from './venues/galleryplayers';
 import { NitehawkScraper } from './venues/nitehawk';
 import { AlamoDrafthouseBrooklynScraper } from './venues/alamodrafthouse';
+import { BAMScraper } from './venues/bam';
+import { RooftopFilmsScraper } from './venues/rooftopfilms';
+import { BrooklynParamountScraper } from './venues/brooklynparamount';
+import { KingsTheatreScraper } from './venues/kingstheatre';
+import { BarclaysScraper } from './venues/barclays';
 import { BaseScraper } from './base';
 
 function getScraperForVenue(venue: VenueConfig): BaseScraper | null {
@@ -50,6 +55,11 @@ function getScraperForVenue(venue: VenueConfig): BaseScraper | null {
     case 'nitehawkwilliamsburg': return new NitehawkScraper(venue);
     case 'nitehawkprospectpark': return new NitehawkScraper(venue);
     case 'alamobrooklyn': return new AlamoDrafthouseBrooklynScraper(venue);
+    case 'bam': return new BAMScraper(venue);
+    case 'rooftopfilms': return new RooftopFilmsScraper(venue);
+    case 'brooklynparamount': return new BrooklynParamountScraper(venue);
+    case 'kingstheatre': return new KingsTheatreScraper(venue);
+    case 'barclays': return new BarclaysScraper(venue);
     default: return null;
   }
 }
@@ -65,7 +75,7 @@ export async function scrapeAllVenues(
 ): Promise<ScrapeResult[]> {
   const results: ScrapeResult[] = [];
 
-  const serverRendered = ['eastville', 'lortel', 'galleryplayers', 'lucky13', 'halyards', 'littlefield'];
+  const serverRendered = ['eastville', 'lortel', 'galleryplayers', 'lucky13', 'halyards', 'littlefield', 'bam', 'rooftopfilms', 'brooklynparamount', 'kingstheatre', 'barclays'];
   const puppeteerBased = ['bellhouse', 'unionhall', 'murmrr', 'heightsplayers', 'barbes', 'publicrecords', 'youngethels', 'jalopy', 'here', 'ucb', 'brooklyncc', 'secondcity', 'magnet', 'caveat', 'nitehawkwilliamsburg', 'nitehawkprospectpark', 'alamobrooklyn'];
 
   const serverVenues = VENUES.filter(v => serverRendered.includes(v.slug));

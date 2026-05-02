@@ -46,6 +46,7 @@ export const VENUE_GROUPS = [
   'Comedy Elsewhere',
   'Theater',
   'Cinema',
+  'Big Stages',
 ] as const;
 
 // Walking distances computed from 433 Warren St Brooklyn, NY 11217
@@ -138,15 +139,38 @@ export const VENUES: VenueConfig[] = [
     category: 'variety', neighborhood: 'Williamsburg',
     group: 'Cinema', groupOrder: 6, venueOrder: 3,
     walkMinutes: 50, transitMinutes: 25, drinkPrice: 10, priority: 13 },
+  { name: 'BAM', slug: 'bam',
+    url: 'https://www.bam.org/calendar',
+    category: 'variety', neighborhood: 'Fort Greene',
+    group: 'Cinema', groupOrder: 6, venueOrder: 4,
+    walkMinutes: 35, transitMinutes: 18, drinkPrice: 14, priority: 14 },
+  { name: 'Rooftop Films', slug: 'rooftopfilms',
+    url: 'https://rooftopfilms.com/calendar/',
+    category: 'variety', neighborhood: 'Various',
+    group: 'Cinema', groupOrder: 6, venueOrder: 5,
+    walkMinutes: 20, transitMinutes: null, drinkPrice: 10, priority: 15 },
 
-  // ── Planned but not yet scraped (priority slots reserved) ──
-  // Cinema tier (priority 11–20):
-  //   - BAM (https://www.bam.org/#Calendar)
-  //   - Rooftop Films (https://rooftopfilms.com/calendar/?type=all-events)
-  // Big-stage tier (priority 21–30):
-  //   - Brooklyn Paramount (https://www.brooklynparamount.com/shows)
-  //   - Kings Theater
-  //   - Barclays Center (https://www.barclayscenter.com/events/category/concerts)
+  // ── Big Stages (group 7) — concert halls, lower priority by distance ──
+  { name: 'Brooklyn Paramount', slug: 'brooklynparamount',
+    url: 'https://www.brooklynparamount.com/shows',
+    category: 'music', neighborhood: 'Downtown Brooklyn',
+    group: 'Big Stages', groupOrder: 7, venueOrder: 1,
+    walkMinutes: 30, transitMinutes: 15, drinkPrice: 14, priority: 21 },
+  { name: 'Kings Theatre', slug: 'kingstheatre',
+    url: 'https://www.kingstheatre.com/events',
+    category: 'music', neighborhood: 'Flatbush',
+    group: 'Big Stages', groupOrder: 7, venueOrder: 2,
+    walkMinutes: 60, transitMinutes: 25, drinkPrice: 14, priority: 22 },
+  { name: 'Barclays Center', slug: 'barclays',
+    url: 'https://www.barclayscenter.com/events/category/concerts',
+    category: 'music', neighborhood: 'Prospect Heights',
+    group: 'Big Stages', groupOrder: 7, venueOrder: 3,
+    walkMinutes: 25, transitMinutes: 12, drinkPrice: 16, priority: 23 },
+
+  // ── Known broken / blocked ──
+  // UCB (https://ucbcomedy.com/nyc/) — Cloudflare blocks both plain HTTP and
+  //   stealth Puppeteer from datacenter IPs. Existing scraper returns 0 until
+  //   we route through a residential-proxy service.
 ];
 
 // Lookup venue config by slug

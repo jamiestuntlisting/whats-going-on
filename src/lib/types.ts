@@ -177,3 +177,32 @@ export const VENUES: VenueConfig[] = [
 export function getVenueConfig(slug: string): VenueConfig | undefined {
   return VENUES.find(v => v.slug === slug);
 }
+
+// Transport tiers, derived from walkMinutes:
+//   walk:    ≤ 15 min walk
+//   bike:    16–40 min walk (~5–13 min Citi Bike)
+//   transit: > 40 min walk (subway / drive)
+export type TransportTier = 'walk' | 'bike' | 'transit';
+
+export const TRANSPORT_LABELS: Record<TransportTier, string> = {
+  walk: 'Walk to it',
+  bike: 'Bike to it',
+  transit: 'Subway away',
+};
+
+export const TRANSPORT_DESCRIPTIONS: Record<TransportTier, string> = {
+  walk: 'Within a 15-minute walk',
+  bike: 'A short Citi Bike ride away (15–40 min walk)',
+  transit: 'Need a subway or a car',
+};
+
+export function getTransportTier(venue: VenueConfig): TransportTier {
+  if (venue.walkMinutes <= 15) return 'walk';
+  if (venue.walkMinutes <= 40) return 'bike';
+  return 'transit';
+}
+
+export function getTransportTierBySlug(slug: string): TransportTier {
+  const v = getVenueConfig(slug);
+  return v ? getTransportTier(v) : 'transit';
+}

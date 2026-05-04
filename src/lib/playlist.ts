@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Event, getVenueConfig } from './types';
+import { Event, getVenueConfig, getTransportTier, TRANSPORT_LABELS, TRANSPORT_DESCRIPTIONS, TransportTier } from './types';
 import { getAllEvents } from './events-data';
 
 export interface ArtistAppearance {
@@ -17,8 +17,11 @@ export interface PlaylistArtist {
   effectiveMinutes: number; // closest appearance, used for ordering within section
   walkOnly: boolean;        // true if any appearance is at a walk-only venue
   bestPriority: number;     // lowest (best) venue priority across appearances
+  bestTier: TransportTier;  // best (closest) transport tier across appearances
   videoId: string | null;   // top YouTube search result, populated by scripts/resolve-youtube.ts
 }
+
+const TIER_RANK: Record<TransportTier, number> = { walk: 0, bike: 1, transit: 2 };
 
 // YouTube ID cache, written by scripts/resolve-youtube.ts. Loaded lazily.
 type YoutubeCache = Record<string, { videoId: string | null; resolvedAt: string }>;
@@ -228,6 +231,7 @@ export function getPlaylistSections(daysAhead = 14): PlaylistSection[] {
     const eff = venue.transitMinutes ?? venue.walkMinutes;
     const isWalkOnly = venue.transitMinutes == null;
     const priority = venue.priority ?? 99;
+    const tier = getTransportTier(venue);
     const artists = extractArtistsFromTitle(e.title);
     for (const artist of artists) {
       const key = artist.toLowerCase();
@@ -244,6 +248,7 @@ export function getPlaylistSections(daysAhead = 14): PlaylistSection[] {
         if (eff < existing.effectiveMinutes) existing.effectiveMinutes = eff;
         if (isWalkOnly) existing.walkOnly = true;
         if (priority < existing.bestPriority) existing.bestPriority = priority;
+        if (TIER_RANK[tier] < TIER_RANK[existing.bestTier]) existing.bestTier = tier;
       } else {
         byArtist.set(key, {
           name: artist,
@@ -251,6 +256,7 @@ export function getPlaylistSections(daysAhead = 14): PlaylistSection[] {
           effectiveMinutes: eff,
           walkOnly: isWalkOnly,
           bestPriority: priority,
+          bestTier: tier,
           videoId: lookupVideoId(artist),
         });
       }
@@ -263,29 +269,22 @@ export function getPlaylistSections(daysAhead = 14): PlaylistSection[] {
     appearances: a.appearances.sort((x, y) => x.date.localeCompare(y.date)),
   }));
 
-  // Section by transport: walking-only venues vs anything that needs a subway.
-  // The user's mental model lumps BCC, Caveat, Young Ethel's etc. together as
-  // "distant" because they require leaving the neighborhood.
-  const close = allArtists.filter(a => a.walkOnly);
-  const distant = allArtists.filter(a => !a.walkOnly);
   // Priority tier first (top picks bubble up), then earliest date, then name.
   const sortFn = (x: PlaylistArtist, y: PlaylistArtist) =>
     (x.bestPriority - y.bestPriority) ||
     x.appearances[0].date.localeCompare(y.appearances[0].date) ||
     x.name.localeCompare(y.name);
-  close.sort(sortFn);
-  distant.sort(sortFn);
 
-  return [
-    {
-      label: 'Walk to it',
-      description: 'Music venues within walking distance — Barbès, Public Records, Murmrr, etc.',
-      artists: close,
-    },
-    {
-      label: 'Subway away',
-      description: 'Venues that need a subway ride — BCC, Caveat, Young Ethel’s, etc.',
-      artists: distant,
-    },
-  ];
+  // Section by transport tier: walk / bike / transit.
+  const sections: PlaylistSection[] = (['walk', 'bike', 'transit'] as TransportTier[])
+    .map(tier => {
+      const artists = allArtists.filter(a => a.bestTier === tier).sort(sortFn);
+      return {
+        label: TRANSPORT_LABELS[tier],
+        description: TRANSPORT_DESCRIPTIONS[tier],
+        artists,
+      };
+    });
+
+  return sections;
 }

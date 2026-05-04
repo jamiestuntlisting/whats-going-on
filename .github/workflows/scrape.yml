@@ -1,0 +1,75 @@
+name: Scheduled scrape
+
+# Runs the venue scrape and commits public/events.json to main if anything
+# changed. Vercel auto-deploys on push so the live app refreshes ~minutes
+# after this workflow finishes.
+#
+# Schedule: every Monday at 10:00 UTC = 6am Eastern (EDT in summer, 5am EST
+# in winter — cron is fixed to UTC). Add `workflow_dispatch` to trigger
+# manually from the Actions tab when needed.
+
+on:
+  schedule:
+    - cron: '0 10 * * 1'
+  workflow_dispatch:
+
+# Required so the workflow's GITHUB_TOKEN can push the events.json refresh.
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ensure Chrome is available for Puppeteer
+        # GitHub-hosted runners ship Chrome pre-installed, but Puppeteer 24
+        # downloads its own copy on first launch. Pre-install so the scrape
+        # doesn't pay that cost (or fail behind a flaky download).
+        run: npx puppeteer browsers install chrome
+
+      - name: Run scrape
+        run: npm run scrape:events
+
+      - name: Sanity check
+        # If total events drops by more than 50% something probably broke.
+        # Bail rather than committing a regression.
+        run: |
+          count=$(node -e "console.log(require('./public/events.json').events.length)")
+          echo "Scraped $count events"
+          if [ "$count" -lt 200 ]; then
+            echo "::error::Suspiciously low event count ($count). Refusing to commit."
+            exit 1
+          fi
+
+      - name: Commit and push if changed
+        run: |
+          if git diff --quiet public/events.json; then
+            echo "No event changes — nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/events.json
+          # Include a per-venue summary in the commit message body for diffability.
+          summary=$(node -e "
+            const d = require('./public/events.json');
+            const by = {};
+            for (const e of d.events) by[e.venue] = (by[e.venue] || 0) + 1;
+            const lines = Object.keys(by).sort().map(v => '  ' + v + ': ' + by[v]);
+            console.log(d.events.length + ' total events\n\n' + lines.join('\n'));
+          ")
+          git commit -m "chore: scheduled scrape refresh" -m "$summary"
+          git push

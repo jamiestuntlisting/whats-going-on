@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Event, getVenueConfig } from './types';
+import { Event, getVenueConfig, getTransportTier, TRANSPORT_LABELS, TRANSPORT_DESCRIPTIONS, TransportTier } from './types';
 import { getAllEvents } from './events-data';
 
 export interface ArtistAppearance {
@@ -16,8 +16,12 @@ export interface PlaylistArtist {
   appearances: ArtistAppearance[];
   effectiveMinutes: number; // closest appearance, used for ordering within section
   walkOnly: boolean;        // true if any appearance is at a walk-only venue
+  bestPriority: number;     // lowest (best) venue priority across appearances
+  bestTier: TransportTier;  // best (closest) transport tier across appearances
   videoId: string | null;   // top YouTube search result, populated by scripts/resolve-youtube.ts
 }
+
+const TIER_RANK: Record<TransportTier, number> = { walk: 0, bike: 1, transit: 2 };
 
 // YouTube ID cache, written by scripts/resolve-youtube.ts. Loaded lazily.
 type YoutubeCache = Record<string, { videoId: string | null; resolvedAt: string }>;
@@ -46,8 +50,8 @@ export interface PlaylistSection {
   artists: PlaylistArtist[];
 }
 
-// Comedy-ish keywords that prove a "music"-categorized title isn't actually
-// a band — Eventbrite/JSON-LD pipelines often mis-tag standup as MusicEvent.
+// Patterns that prove a "music"-categorized title isn't actually a band —
+// Eventbrite/JSON-LD pipelines often mis-tag standup/dance/etc as MusicEvent.
 const COMEDY_HINTS = [
   /\bcomedy\b/i,
   /\bcomedian\b/i,
@@ -61,7 +65,20 @@ const COMEDY_HINTS = [
   /\bvariety\b/i,
   /\bimprov\b/i,
   /\bsketch\b/i,
+  /\bdance party\b/i,
+  /\bdj\s+set\b/i,
+  /\bdj\s+night\b/i,
+  /\bdraglesque\b/i,
+  /\bdrag\s+show\b/i,
+  /\bscreening\b/i,
+  /\bstoryslam\b/i,
+  /\bstory\s+slam\b/i,
 ];
+
+// Young Ethel's etc. mark per-event category as a parenthetical suffix
+// like "(Music)", "(Comedy)", "(Draglesque)". Anything that isn't (Music)
+// is not a music event.
+const TAG_SUFFIX_RE = /\(([^()]{2,30})\)\s*$/;
 
 // Tokens we drop from artist candidates outright.
 const TOKEN_BLOCKLIST = new Set([
@@ -99,7 +116,11 @@ const SUFFIX_PATTERNS: RegExp[] = [
 ];
 
 function looksLikeComedy(title: string): boolean {
-  return COMEDY_HINTS.some(rx => rx.test(title));
+  if (COMEDY_HINTS.some(rx => rx.test(title))) return true;
+  // Reject explicit non-music category tag suffix.
+  const m = title.match(TAG_SUFFIX_RE);
+  if (m && !/^music$/i.test(m[1].trim())) return true;
+  return false;
 }
 
 function stripDecorations(title: string): string {
@@ -195,8 +216,11 @@ export function getPlaylistSections(daysAhead = 14): PlaylistSection[] {
   horizon.setDate(horizon.getDate() + daysAhead);
   const horizonStr = horizon.toISOString().split('T')[0];
 
+  // Filter by the venue's *current* category, not whatever was stamped on the
+  // event at scrape time. This way recategorizing a venue (e.g. Union Hall:
+  // music → comedy) takes effect immediately without re-scraping.
   const events: Event[] = getAllEvents()
-    .filter(e => e.category === 'music')
+    .filter(e => getVenueConfig(e.venue_slug)?.category === 'music')
     .filter(e => e.date >= today && e.date <= horizonStr);
 
   const byArtist = new Map<string, PlaylistArtist>();
@@ -206,6 +230,8 @@ export function getPlaylistSections(daysAhead = 14): PlaylistSection[] {
     if (!venue) continue;
     const eff = venue.transitMinutes ?? venue.walkMinutes;
     const isWalkOnly = venue.transitMinutes == null;
+    const priority = venue.priority ?? 99;
+    const tier = getTransportTier(venue);
     const artists = extractArtistsFromTitle(e.title);
     for (const artist of artists) {
       const key = artist.toLowerCase();
@@ -221,12 +247,16 @@ export function getPlaylistSections(daysAhead = 14): PlaylistSection[] {
         existing.appearances.push(appearance);
         if (eff < existing.effectiveMinutes) existing.effectiveMinutes = eff;
         if (isWalkOnly) existing.walkOnly = true;
+        if (priority < existing.bestPriority) existing.bestPriority = priority;
+        if (TIER_RANK[tier] < TIER_RANK[existing.bestTier]) existing.bestTier = tier;
       } else {
         byArtist.set(key, {
           name: artist,
           appearances: [appearance],
           effectiveMinutes: eff,
           walkOnly: isWalkOnly,
+          bestPriority: priority,
+          bestTier: tier,
           videoId: lookupVideoId(artist),
         });
       }
@@ -239,27 +269,22 @@ export function getPlaylistSections(daysAhead = 14): PlaylistSection[] {
     appearances: a.appearances.sort((x, y) => x.date.localeCompare(y.date)),
   }));
 
-  // Section by transport: walking-only venues vs anything that needs a subway.
-  // The user's mental model lumps BCC, Caveat, Young Ethel's etc. together as
-  // "distant" because they require leaving the neighborhood.
-  const close = allArtists.filter(a => a.walkOnly);
-  const distant = allArtists.filter(a => !a.walkOnly);
+  // Priority tier first (top picks bubble up), then earliest date, then name.
   const sortFn = (x: PlaylistArtist, y: PlaylistArtist) =>
+    (x.bestPriority - y.bestPriority) ||
     x.appearances[0].date.localeCompare(y.appearances[0].date) ||
     x.name.localeCompare(y.name);
-  close.sort(sortFn);
-  distant.sort(sortFn);
 
-  return [
-    {
-      label: 'Walk to it',
-      description: 'Venues within walking distance — Bell House, Public Records, Union Hall, etc.',
-      artists: close,
-    },
-    {
-      label: 'Subway away',
-      description: 'Venues that need a subway ride — BCC, Caveat, Young Ethel’s, etc.',
-      artists: distant,
-    },
-  ];
+  // Section by transport tier: walk / bike / transit.
+  const sections: PlaylistSection[] = (['walk', 'bike', 'transit'] as TransportTier[])
+    .map(tier => {
+      const artists = allArtists.filter(a => a.bestTier === tier).sort(sortFn);
+      return {
+        label: TRANSPORT_LABELS[tier],
+        description: TRANSPORT_DESCRIPTIONS[tier],
+        artists,
+      };
+    });
+
+  return sections;
 }

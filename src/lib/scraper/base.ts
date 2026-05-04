@@ -91,6 +91,40 @@ export abstract class BaseScraper {
   }
 }
 
+// Stealth helper — for sites that block plain Puppeteer (Cloudflare, etc.)
+let _stealthBrowser: import('puppeteer').Browser | null = null;
+
+export async function scrapeWithStealth(url: string, settleMs = 2000): Promise<string> {
+  if (!_stealthBrowser || !_stealthBrowser.connected) {
+    const [puppeteerExtra, stealthMod] = await Promise.all([
+      import('puppeteer-extra'),
+      import('puppeteer-extra-plugin-stealth'),
+    ]);
+    const pe = (puppeteerExtra as unknown as { default: { use: (p: unknown) => void; launch: (opts: unknown) => Promise<import('puppeteer').Browser> } }).default;
+    pe.use((stealthMod as unknown as { default: () => unknown }).default());
+    _stealthBrowser = await pe.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    });
+  }
+  const page = await _stealthBrowser.newPage();
+  await page.setUserAgent(USER_AGENT);
+  try {
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    await new Promise(r => setTimeout(r, settleMs));
+    return await page.content();
+  } finally {
+    await page.close();
+  }
+}
+
+export async function closeStealthBrowser(): Promise<void> {
+  if (_stealthBrowser) {
+    await _stealthBrowser.close();
+    _stealthBrowser = null;
+  }
+}
+
 // Puppeteer helper for SPA sites
 let _browser: import('puppeteer').Browser | null = null;
 

@@ -5,6 +5,7 @@ import SwipeableEvent from './SwipeableEvent';
 import CategoryFilter from './CategoryFilter';
 import DateNav from './DateNav';
 import { useDecisions, getDecision, type Decision } from '@/lib/decisions';
+import { getTransportTierBySlug, TRANSPORT_LABELS, TRANSPORT_DESCRIPTIONS, type TransportTier } from '@/lib/types';
 
 interface EnrichedEvent {
   id: string;
@@ -181,14 +182,30 @@ export default function EventList() {
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-4">
           <p className="text-xs text-zinc-400 font-medium">
             {visibleEvents.length} event{visibleEvents.length !== 1 ? 's' : ''}
             {view === 'undecided' ? ' (closest first)' : ''}
           </p>
-          {visibleEvents.map(event => (
-            <SwipeableEvent key={event.id} event={event} onDecide={handleDecide} />
-          ))}
+          {(['walk', 'bike', 'transit'] as TransportTier[]).map(tier => {
+            const tierEvents = visibleEvents.filter(e => getTransportTierBySlug(e.venue_slug) === tier);
+            if (tierEvents.length === 0) return null;
+            return (
+              <section key={tier} className="flex flex-col gap-2">
+                <header>
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    {TRANSPORT_LABELS[tier]} · {tierEvents.length}
+                  </h2>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                    {TRANSPORT_DESCRIPTIONS[tier]}
+                  </p>
+                </header>
+                {tierEvents.map(event => (
+                  <SwipeableEvent key={event.id} event={event} onDecide={handleDecide} />
+                ))}
+              </section>
+            );
+          })}
         </div>
       )}
     </div>

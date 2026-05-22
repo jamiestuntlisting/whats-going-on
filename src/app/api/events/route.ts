@@ -3,29 +3,35 @@ import { getEventsByDate, getEventsInRange, getEventDatesInMonth, getLastScrapeT
 import { Event, getVenueConfig, SUBWAY_FARE } from '@/lib/types';
 import { getSettings } from '@/lib/settings';
 
-// Effective travel time from home: subway when defined (faster path),
-// otherwise walking. Used as the primary sort key so distant events sink
-// to the bottom of the list.
-function effectiveMinutes(slug: string): number {
-  const v = getVenueConfig(slug);
-  if (!v) return 999;
-  return v.transitMinutes ?? v.walkMinutes;
+// Convert a display time like "8:00 PM" / "9:30 AM" to minutes since midnight
+// so we can sort chronologically. Lexical sort is wrong ("10:00 AM" < "9:00 AM"),
+// hence this parse. Events with no known time sink to the end of their section.
+function timeToMinutes(time: string | null): number {
+  if (!time) return 99999;
+  const m = time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!m) return 99999;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const period = m[3]?.toUpperCase();
+  if (period === 'PM' && h !== 12) h += 12;
+  if (period === 'AM' && h === 12) h = 0;
+  return h * 60 + min;
 }
 
-// Sort events by venue priority tier → effective travel time → time → title.
-// Priority tier reflects user preference (top picks > cinema > others); distance
-// is the tie-breaker within a tier.
-function sortByDistance(events: Event[]): Event[] {
+// Sort by date → time of day → venue priority → title. Time of day is the
+// primary key (within a day) so the earliest shows surface first in each
+// transport-tier section on the Today view. Priority is only a same-time
+// tie-breaker. The leading date key keeps multi-day range queries (Calendar)
+// grouped by day rather than interleaving times across dates.
+function sortByTime(events: Event[]): Event[] {
   return events.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    const ta = timeToMinutes(a.time);
+    const tb = timeToMinutes(b.time);
+    if (ta !== tb) return ta - tb;
     const pa = getVenueConfig(a.venue_slug)?.priority ?? 99;
     const pb = getVenueConfig(b.venue_slug)?.priority ?? 99;
     if (pa !== pb) return pa - pb;
-    const ma = effectiveMinutes(a.venue_slug);
-    const mb = effectiveMinutes(b.venue_slug);
-    if (ma !== mb) return ma - mb;
-    const timeA = a.time || 'ZZ';
-    const timeB = b.time || 'ZZ';
-    if (timeA !== timeB) return timeA.localeCompare(timeB);
     return a.title.localeCompare(b.title);
   });
 }
@@ -89,14 +95,20 @@ export async function GET(request: NextRequest) {
     return Response.json({ dates, lastScrape });
   }
 
-  // Get events in a date range
+  const today = new Date().toISOString().split('T')[0];
+
+  // Get events in a date range. Clamp the start to today so past shows are
+  // never returned, even if an old date is requested.
   if (startDate && endDate) {
-    const events = sortByDistance(getEventsInRange(startDate, endDate));
+    const from = startDate < today ? today : startDate;
+    const events = sortByTime(getEventsInRange(from, endDate));
     return Response.json({ events: enrichEvents(events), lastScrape, homeAddress: settings.homeAddress });
   }
 
-  // Get events for a specific date
-  const targetDate = date || new Date().toISOString().split('T')[0];
-  const events = sortByDistance(getEventsByDate(targetDate, category));
+  // Get events for a specific date. Never serve a past date — fall back to
+  // today so old shows are thrown away.
+  const requested = date || today;
+  const targetDate = requested < today ? today : requested;
+  const events = sortByTime(getEventsByDate(targetDate, category));
   return Response.json({ events: enrichEvents(events), lastScrape, homeAddress: settings.homeAddress });
 }

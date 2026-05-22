@@ -24,23 +24,28 @@ export default function DateNav({
   date: string;
   onChange: (date: string) => void;
 }) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isToday = date === todayStr;
+
   const goDay = (offset: number) => {
     const d = new Date(date + 'T12:00:00');
     d.setDate(d.getDate() + offset);
-    onChange(d.toISOString().split('T')[0]);
+    const next = d.toISOString().split('T')[0];
+    // Today is the floor — never navigate into the past.
+    if (next < todayStr) return;
+    onChange(next);
   };
 
   const goToday = () => {
-    onChange(new Date().toISOString().split('T')[0]);
+    onChange(todayStr);
   };
-
-  const isToday = date === new Date().toISOString().split('T')[0];
 
   return (
     <div className="flex items-center justify-between">
       <button
         onClick={() => goDay(-1)}
-        className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+        disabled={isToday}
+        className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
         aria-label="Previous day"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
